@@ -24,3 +24,221 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+.nav-arrow {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-arrow:hover {
+  transform: translateY(-1px);
+}
+
+.nav-arrow:active {
+  transform: translateY(0);
+}
+/* Parking Space Popup Styles */
+.parking-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.popup-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.popup-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 90%;
+  max-width: 400px;
+  overflow: hidden;
+  animation: popupFadeIn 0.2s ease-out;
+}
+
+@keyframes popupFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Popup styles - keep as is */
+.popup-header {
+  padding: 16px 20px;
+  background: #1e40af;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.popup-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.popup-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.popup-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.popup-body {
+  padding: 20px;
+}
+
+.space-detail {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.space-detail:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.space-detail strong {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.popup-footer {
+  padding: 16px 20px;
+  background: #f9fafb;
+  text-align: right;
+  border-top: 1px solid #e5e7eb;
+}
+
+.popup-ok-btn {
+  background: #1e40af;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.popup-ok-btn:hover {
+  background: #1e3a8a;
+}
+
+/* SVG Container - keep as is */
+.svg-container svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Parking space hover effects - UPDATED */
+.parking-spot {  /* Changed from .parking-space to match JS class */
+  transition: all 0.2s ease;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+/* Color-specific styles for our parking spots */
+.cyan-spot {
+  /* Original cyan color #80ffff */
+}
+
+.yellow-spot {
+  /* Original yellow color #ffff80 */
+}
+
+/* Highlight state for hover/selection */
+.parking-spot.highlighted,
+.parking-spot:hover {
+  fill: rgba(0, 255, 136, 0.7) !important;
+  stroke: #00ff88 !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* Selected state */
+.parking-spot.selected {
+  fill: rgba(59, 130, 246, 0.7) !important; /* Blue */
+  stroke: #3b82f6 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+}
+
+/* Popup overlay for modal */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.popup-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  overflow: hidden;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Status indicator styles */
+.spot-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.spot-status-available {
+  background: #10b981;
+  color: white;
+}
+
+.spot-status-occupied {
+  background: #ef4444;
+  color: white;
+}
+
+.spot-status-reserved {
+  background: #f59e0b;
+  color: white;
+}
