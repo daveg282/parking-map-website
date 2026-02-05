@@ -4,6 +4,16 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
+export function generateStaticParams() {
+  return [
+    { floorId: '1' },
+    { floorId: '2' },
+    { floorId: '3' },
+    { floorId: '4' },
+    { floorId: '5' },
+  ];
+}
+
 export default function FloorPage() {
   const params = useParams()
   const floorId = params.floorId || '1'
@@ -56,6 +66,9 @@ export default function FloorPage() {
       console.log(`Saved ${spots.length} spots to localStorage for floor ${floorId}`);
     }
   }, [spots, floorId]);
+   
+  
+
 
   const normalizeColor = (color) => {
     if (!color) return '';
