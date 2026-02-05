@@ -4,17 +4,11 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
-// Add this export
-export const dynamicParams = true;
-
 export async function generateStaticParams() {
-  // Pre-render some floors, others will be rendered at runtime
-  return [
-    { floorId: '1' },
-    { floorId: '2' },
-  ]
-} 
-
+  return [1, 2, 3, 4, 5].map(floorId => ({
+    floorId: floorId.toString()
+  }))
+}
 export default function FloorPage() {
   const params = useParams()
   const floorId = params.floorId || '1'
