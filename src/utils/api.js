@@ -1,79 +1,78 @@
-import axios from 'axios'
+// utils/api.js
+import { supabase } from '@/lib/supabase'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api'
+export const parkingApi = {
+  // Get spots for a floor (Public & Admin)
+  getSpotsByFloor: async (floorId) => {
+    const { data, error } = await supabase
+      .from('parking_spots')
+      .select('*')
+      .eq('floor_id', floorId)
+      .order('svg_y')
+    
+    return { data, error }
+  },
 
-// Create axios instance for read-only calls
-const api = axios.create({
-  baseURL: API_BASE,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  }
-})
-
-// CLIENT ONLY - READ ONLY API FUNCTIONS
-export async function fetchParkingData(floor) {
-  try {
-    // In development, use mock data
-    if (process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_API_URL) {
-      return getMockParkingData(floor)
+  // Save a spot (Admin only)
+  saveSpot: async (spot) => {
+    // Check if spot already exists
+    const { data: existingSpot } = await supabase
+      .from('parking_spots')
+      .select('id')
+      .eq('floor_id', spot.floor_id)
+      .eq('spot_identifier', spot.spot_identifier)
+      .maybeSingle()
+    
+    if (existingSpot) {
+      // Update existing spot
+      const { data, error } = await supabase
+        .from('parking_spots')
+        .update({
+          display_label: spot.display_label,
+          custom_label: spot.custom_label,
+          is_custom_labeled: spot.is_custom_labeled,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingSpot.id)
+        .select()
+        .single()
+      
+      return { data, error }
+    } else {
+      // Create new spot
+      const { data, error } = await supabase
+        .from('parking_spots')
+        .insert([{
+          ...spot,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single()
+      
+      return { data, error }
     }
-    
-    const response = await api.get(`/parking/floors/${floor}`)
-    return response.data
-  } catch (error) {
-    console.error('Error fetching parking data:', error)
-    // Return mock data as fallback
-    return getMockParkingData(floor)
-  }
-}
+  },
 
-// Mock data for development
-function getMockParkingData(floor) {
-  const mockSpaces = []
-  
-  // Generate mock parking spaces
-  for (let i = 1; i <= 50; i++) {
-    const spaceId = `${floor}${i.toString().padStart(3, '0')}`
-    const hasAssignment = Math.random() > 0.3
-    const isMonthly = hasAssignment && Math.random() > 0.5
+  // Delete a spot (Admin only)
+  deleteSpot: async (spotId) => {
+    const { error } = await supabase
+      .from('parking_spots')
+      .delete()
+      .eq('id', spotId)
     
-    mockSpaces.push({
-      id: spaceId,
-      number: i.toString(),
-      floor: parseInt(floor),
-      type: i <= 5 ? 'handicap' : 'standard',
-      status: hasAssignment ? 'occupied' : 'available',
-      assignment: hasAssignment ? {
-        parkerName: isMonthly ? `Monthly Parker ${i}` : `Temporary Parker ${i}`,
-        company: isMonthly ? `Company ${Math.floor(i/10) + 1}` : 'Visitor',
-        monthly: isMonthly,
-        startDate: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: isMonthly ? null : new Date(Date.now() + Math.random() * 14 * 24 * 60 * 60 * 1000).toISOString(),
-        contactEmail: isMonthly ? `parker${i}@company.com` : null
-      } : null,
-      lastUpdated: new Date().toISOString()
-    })
-  }
-  
-  return {
-    floor: parseInt(floor),
-    totalSpaces: 50,
-    availableSpaces: mockSpaces.filter(s => !s.assignment).length,
-    monthlyParkers: mockSpaces.filter(s => s.assignment?.monthly).length,
-    spaces: mockSpaces
-  }
-}
+    return { error }
+  },
 
-// Search function (read-only)
-export async function searchParker(searchTerm) {
-  try {
-    const response = await api.get('/parking/search', {
-      params: { q: searchTerm }
-    })
-    return response.data
-  } catch (error) {
-    console.error('Error searching parker:', error)
-    return { results: [] }
+  // Update custom label (Admin only)
+  updateSpotLabel: async (spotId, updates) => {
+    const { data, error } = await supabase
+      .from('parking_spots')
+      .update(updates)
+      .eq('id', spotId)
+      .select()
+      .single()
+    
+    return { data, error }
   }
 }

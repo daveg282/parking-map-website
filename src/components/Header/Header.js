@@ -1,65 +1,145 @@
 'use client'
 
+import { usePathname } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import Link from 'next/link'
+
 export default function Header() {
+  const pathname = usePathname()
+  const { user, loading } = useAuth()
+
+  const isHomePage = pathname === '/'
+  const isFloorPage = pathname.startsWith('/floor/')
+  const isLoginPage = pathname === '/login'
+  const isAdminPage = pathname.startsWith('/admin')
+
+  // Show header on ALL pages including admin
   return (
-    <header className="bg-white border-b">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-14 sm:h-16">
-          {/* Logo and Title */}
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-base sm:text-lg">P</span>
+    <header className="bg-white shadow">
+      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          {/* Left side: Logo and Navigation */}
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <Link href="/" className="text-xl font-bold text-blue-600 hover:text-blue-700">
+                Parking Map
+              </Link>
             </div>
             
-            <div>
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900">
-                Parking Garage Map
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-500">
-                Interactive Viewer
-              </p>
+            {/* Desktop Navigation */}
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              {/* Home Navigation */}
+              <button
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                  isHomePage
+                    ? 'border-blue-500 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Home
+              </button>
+              
+              {/* Floor Navigation */}
+              <button
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                  isFloorPage
+                    ? 'border-blue-500 text-gray-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                View Parking
+              </button>
+              
+              {/* Admin Link (only when logged in) */}
+              {user && (
+                <Link
+                  href="/admin"
+                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                    isAdminPage
+                      ? 'border-blue-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Admin
+                </Link>
+              )}
             </div>
           </div>
-          
-          {/* Contact Badge */}
+
+          {/* Right side: Login/Logout */}
           <div className="flex items-center">
-            <div className="hidden sm:block bg-blue-50 rounded-lg px-4 py-2">
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
-                  <a 
-                    href="tel:+15551234567" 
-                    className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors"
-                  >
-                    (555) 123-4567
-                  </a>
-                </div>
-                
-                <div className="h-4 w-px bg-gray-300"></div>
-                
-                <div className="text-xs text-gray-600">
-                  <span className="font-medium">Hours:</span> 8AM-6PM
-                </div>
-              </div>
-            </div>
+            {loading ? (
+              <div className="text-sm text-gray-500">Loading...</div>
+            ) : user ? (
+              <div className="flex items-center space-x-4 ">
             
-            {/* Mobile Contact Button */}
-            <div className="sm:hidden">
-              <a 
-                href="tel:+15551234567"
-                className="flex items-center justify-center w-10 h-10 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                aria-label="Call Parking Office"
+                <button
+                  onClick={() => {
+                    // Simple logout
+                    localStorage.removeItem('supabase-user')
+                    localStorage.removeItem('supabase-auth-token')
+                    window.location.href = '/'
+                  }}
+                  className="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
-              </a>
-            </div>
+                Login
+              </Link>
+            )}
           </div>
         </div>
-      </div>
+
+        {/* Mobile Navigation */}
+        <div className="sm:hidden border-t border-gray-200 mt-2 pt-2">
+          <div className="flex space-x-4">
+            <button
+              className={`flex-1 text-center pb-2 ${
+                isHomePage ? 'border-b-2 border-blue-500' : ''
+              }`}
+            >
+              <span className={`text-sm font-medium ${
+                isHomePage ? 'text-gray-900' : 'text-gray-500'
+              }`}>
+                Home
+              </span>
+            </button>
+            
+            <button
+              className={`flex-1 text-center pb-2 ${
+                isFloorPage ? 'border-b-2 border-blue-500' : ''
+              }`}
+            >
+              <span className={`text-sm font-medium ${
+                isFloorPage ? 'text-gray-900' : 'text-gray-500'
+              }`}>
+                View Parking
+              </span>
+            </button>
+            
+            {user && (
+              <Link
+                href="/admin"
+                className={`flex-1 text-center pb-2 ${
+                  isAdminPage ? 'border-b-2 border-blue-500' : ''
+                }`}
+              >
+                <span className={`text-sm font-medium ${
+                  isAdminPage ? 'text-gray-900' : 'text-gray-500'
+                }`}>
+                  Admin
+                </span>
+              </Link>
+            )}
+          </div>
+        </div>
+      </nav>
     </header>
   )
 }
