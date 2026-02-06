@@ -1,40 +1,45 @@
 import { createClient } from '@supabase/supabase-js'
 
+// Helper to check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined'
+
 let supabase
 
 try {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  console.log('🔄 Supabase Config:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseKey,
-    url: supabaseUrl?.substring(0, 30) + '...'
-  })
-
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn('⚠️ Missing Supabase environment variables - using dummy client for build')
+  // Only initialize on the client side during build
+  if (typeof window === 'undefined') {
+    console.log('🚀 Server-side build detected - skipping Supabase initialization')
     
-    // Create a dummy client for build time
+    // Minimal dummy client for server-side rendering during build
     supabase = {
       auth: {
         signOut: () => Promise.resolve(),
         getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+        signInWithOtp: () => Promise.resolve({ data: null, error: null }),
+        signInWithPassword: () => Promise.resolve({ data: { session: null, user: null }, error: null }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
       },
       from: () => ({
         select: () => Promise.resolve({ data: [], error: null }),
-        insert: () => Promise.resolve({ data: [], error: null }),
-        update: () => Promise.resolve({ data: [], error: null }),
-        delete: () => Promise.resolve({ data: [], error: null }),
-        eq: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
-        single: () => Promise.resolve({ data: null, error: null })
-      }),
-      channel: () => ({
-        subscribe: () => ({})
+        eq: () => ({ select: () => Promise.resolve({ data: [], error: null }) })
       })
     }
   } else {
+    // Client-side initialization
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    console.log('🔄 Supabase Config:', {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!supabaseKey,
+      url: supabaseUrl?.substring(0, 30) + '...'
+    })
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('❌ Missing Supabase environment variables')
+      throw new Error('Missing Supabase environment variables. Please check your .env.local file.')
+    }
+
     supabase = createClient(supabaseUrl, supabaseKey, {
       auth: {
         autoRefreshToken: false,
@@ -44,24 +49,17 @@ try {
         storage: {
           getItem: (key) => {
             console.log('📥 Storage GET:', key)
-            if (typeof window !== 'undefined') {
-              const item = localStorage.getItem(key)
-              console.log('📥 Storage item:', item?.substring(0, 50) + '...')
-              return item
-            }
-            return null
+            const item = localStorage.getItem(key)
+            console.log('📥 Storage item:', item?.substring(0, 50) + '...')
+            return item
           },
           setItem: (key, value) => {
             console.log('📤 Storage SET:', key, value?.substring(0, 50) + '...')
-            if (typeof window !== 'undefined') {
-              localStorage.setItem(key, value)
-            }
+            localStorage.setItem(key, value)
           },
           removeItem: (key) => {
             console.log('🗑️ Storage REMOVE:', key)
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem(key)
-            }
+            localStorage.removeItem(key)
           }
         }
       }
@@ -70,23 +68,18 @@ try {
 } catch (error) {
   console.error('❌ Error initializing Supabase:', error)
   
-  // Fallback to dummy client
+  // Minimal fallback for build
   supabase = {
     auth: {
       signOut: () => Promise.resolve(),
       getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+      signInWithOtp: () => Promise.resolve({ data: null, error: null }),
+      signInWithPassword: () => Promise.resolve({ data: { session: null, user: null }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
     },
     from: () => ({
       select: () => Promise.resolve({ data: [], error: null }),
-      insert: () => Promise.resolve({ data: [], error: null }),
-      update: () => Promise.resolve({ data: [], error: null }),
-      delete: () => Promise.resolve({ data: [], error: null }),
-      eq: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
-      single: () => Promise.resolve({ data: null, error: null })
-    }),
-    channel: () => ({
-      subscribe: () => ({})
+      eq: () => ({ select: () => Promise.resolve({ data: [], error: null }) })
     })
   }
 }
