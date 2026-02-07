@@ -21,15 +21,16 @@ export default function Header() {
           {/* Left side: Logo and Navigation */}
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Link href="/" className="text-xl font-bold text-blue-600 hover:text-blue-700">
+              <button  className="text-xl font-bold text-blue-600 hover:text-blue-700">
                 Parking Map
-              </Link>
+              </button>
             </div>
             
             {/* Desktop Navigation */}
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               {/* Home Navigation */}
-              <button
+              <Link
+              href="/"
                 className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
                   isHomePage
                     ? 'border-blue-500 text-gray-900'
@@ -37,7 +38,7 @@ export default function Header() {
                 }`}
               >
                 Home
-              </button>
+              </Link>
               
               {/* Floor Navigation */}
               <button
