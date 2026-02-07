@@ -386,74 +386,77 @@ export default function PublicFloorPage() {
   // ==================== RENDER FUNCTIONS ====================
 
   const renderInteractiveOverlay = () => {
-    if (!svgContent || spots.length === 0) return null;
+  if (!svgContent || spots.length === 0) return null;
 
-    return (
-      <div className="absolute inset-0 pointer-events-none">
-        {spots.map((spot) => {
-          const pos = calculateSpotPosition(spot);
-          if (!pos) return null;
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {spots.map((spot) => {
+        const pos = calculateSpotPosition(spot);
+        if (!pos) return null;
 
-          // Determine what text to show on the spot
-          const displayText = spot.spotNumber; // Show spot number by default
-          const titleText = `${spot.spotNumber}${spot.companyName && spot.companyName !== 'Unassigned' ? ` • ${spot.companyName}` : ''}${spot.parkerName ? ` • 👤 ${spot.parkerName}` : ''}`;
+        // Determine what text to show on the spot
+        const displayText = spot.spotNumber; // Show spot number by default
+        const titleText = `${spot.spotNumber}${spot.companyName && spot.companyName !== 'Unassigned' ? ` • ${spot.companyName}` : ''}${spot.parkerName ? ` • 👤 ${spot.parkerName}` : ''}`;
 
-          return (
+        return (
+          <div 
+            key={spot.id} 
+            className="absolute group" 
+            style={{
+              left: pos.left,
+              top: pos.top,
+              width: pos.width,
+              height: pos.height,
+            }}
+          >
+            {/* GREEN SPOT INDICATOR - Always visible, below hover area */}
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg opacity-80 group-hover:opacity-100 group-hover:scale-125 transition-all duration-200 pointer-events-none"></div>
+            </div>
+            
+            {/* HOVER AREA - Invisible but clickable */}
             <button
-              key={spot.id}
-              className="absolute cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-blue-500 rounded pointer-events-auto group focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="absolute inset-0 cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-green-500 rounded pointer-events-auto focus:outline-none focus:ring-2 focus:ring-green-500"
               style={{
-                left: pos.left,
-                top: pos.top,
-                width: pos.width,
-                height: pos.height,
                 backgroundColor: 'transparent',
-                zIndex: 1
               }}
               onClick={() => handleSpotClick(spot)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#06b6d4';
-                e.currentTarget.style.backgroundColor = 'rgba(6, 182, 212, 0.1)';
-                e.currentTarget.style.zIndex = '10';
+                e.currentTarget.style.borderColor = '#10b981';
+                e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = 'transparent';
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.zIndex = '1';
               }}
               title={titleText}
             >
-              {/* Display the spot number on hover */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className={`text-xs font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                  spot.parkerName 
-                    ? 'bg-purple-600 text-white' 
-                    : 'bg-black/70 text-white'
-                }`}>
-                  {displayText}
-                </div>
-              </div>
-              
-              {/* Tooltip */}
-              <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 shadow-lg min-w-[180px]">
-                <div className="font-bold text-center mb-1">{spot.spotNumber}</div>
-                
-                {spot.companyName && spot.companyName !== 'Unassigned' && (
-                  <div className="text-center text-blue-300 mb-1">🏢 {spot.companyName}</div>
-                )}
-                
-                {spot.parkerName && (
-                  <div className="text-center text-purple-300 mb-1">👤 {spot.parkerName}</div>
-                )}
-                
-                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 w-3 h-3 bg-gray-900 rotate-45"></div>
-              </div>
+              {/* Invisible area - just for interaction */}
             </button>
-          )
-        })}
-      </div>
-    )
-  };
+            
+            {/* TOOLTIP - Renders above everything */}
+            <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg min-w-[180px] z-50">
+              <div className="font-bold text-center mb-1">{spot.spotNumber}</div>
+              
+              {spot.companyName && spot.companyName !== 'Unassigned' && (
+                <div className="text-center text-blue-300 mb-1">🏢 {spot.companyName}</div>
+              )}
+              
+              {spot.parkerName && (
+                <div className="text-center text-purple-300 mb-1">👤 {spot.parkerName}</div>
+              )}
+              
+              {/* Proper downward-pointing triangle arrow */}
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2">
+                <div className="w-0 h-0 border-l-6 border-r-6 border-t-6 border-transparent border-t-gray-900"></div>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+};
 
   // ==================== MAIN RENDER ====================
 
@@ -483,7 +486,7 @@ export default function PublicFloorPage() {
               {!loading && !error && (
                 <div className="flex items-center gap-4 mt-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-[#80ffff] rounded-sm border border-gray-300"></div>
+                    <div className="w-3 h-3 rounded-sm border border-gray-300"></div>
                     <span className="text-gray-600">{spots.length} parking spots</span>
                   </div>
                   <span className="text-gray-600">
@@ -546,6 +549,15 @@ export default function PublicFloorPage() {
               </div>
             )}
           </div>
+          
+          {/* Legend/Help Text */}
+          <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md text-xs">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-3 h-3 bg-green-500 rounded-full border border-white"></div>
+              <span className="text-gray-700">Clickable parking spots</span>
+            </div>
+            <div className="text-gray-500">Hover over green dots for details</div>
+          </div>
         </div>
 
         {/* Selected Spot Panel & Spot List */}
@@ -595,7 +607,7 @@ export default function PublicFloorPage() {
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                   <div className="text-gray-400 mb-2">👆</div>
                   <p className="text-sm text-gray-600">
-                    Click on any parking spot to view details
+                    Click on any green dot to view spot details
                   </p>
                 </div>
               )}

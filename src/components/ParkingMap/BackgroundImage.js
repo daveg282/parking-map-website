@@ -11,7 +11,7 @@ export default function BackgroundImage({ floor }) {
   const getImagePath = (floorNum) => {
     // Your files are: parking_page-0001.jpg, parking_page-0002.jpg, etc.
     const paddedFloor = floorNum.toString().padStart(4, '0')
-    return `/maps/parking_page-${paddedFloor}.jpg`
+    return `/maps/parking_page-${paddedFloor}.png`
   }
 
   // Update image path when floor changes
@@ -89,7 +89,7 @@ export default function BackgroundImage({ floor }) {
       
       {/* Debug info */}
       <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-        Floor {floor} | File: parking_page-{floor.toString().padStart(4, '0')}.jpg
+        Floor {floor} | File: parking_page-{floor.toString().padStart(4, '0')}.png
       </div>
       
       {/* Gradient overlay */}

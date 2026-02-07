@@ -763,19 +763,19 @@ export default function AdminFloorPage() {
               title={`${spot.companyName} • ${spot.spotNumber}${spot.parkerName ? ` • 👤 ${spot.parkerName}` : ''}`}
             >
               {spot.parkerName && (
-                <div className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                <div className="absolute -top-6  text-white text-xs mt-1 rounded-full">
                   👤
                 </div>
               )}
               
               {spot.isFromDatabase && !spot.parkerName && (
-                <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                <div className="absolute -top-4 text-white text-xs mt-1 rounded-full">
                   💾
                 </div>
               )}
               
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className={`text-xs font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                <div className={`text-xs font-bold px-2 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
                   spot.parkerName 
                     ? 'bg-purple-600 text-white' 
                     : 'bg-black/70 text-white'
@@ -801,17 +801,13 @@ export default function AdminFloorPage() {
               <h1 className="text-2xl font-bold text-gray-900">
                 Floor {floorId} - Parking Admin
               </h1>
-              <p className="text-gray-600 mt-1">
-                {isInitialDetectionDone 
-                  ? 'Cyan spots detected. Click spots to edit company/parker/spot info.'
-                  : 'Detecting cyan parking spots...'}
-              </p>
+         
               {!loading && !error && (
                 <div className="flex items-center gap-4 mt-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-[#80ffff] rounded-sm border border-gray-300"></div>
+                    <div className="w-3 h-3 rounded-sm border border-gray-300"></div>
                     <span className="text-gray-600">
-                      {spots.length} cyan spots • {spots.filter(s => s.parkerName).length} with parkers • {spots.filter(s => s.isFromDatabase).length} in DB
+                      {spots.length} spots • {spots.filter(s => s.parkerName).length} with parkers • {spots.filter(s => s.isFromDatabase).length} in DB
                     </span>
                   </div>
                 </div>
@@ -824,7 +820,7 @@ export default function AdminFloorPage() {
                 className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
                 disabled={loading}
               >
-                {loading ? 'Processing...' : '🔄 Re-detect Cyan Spots'}
+                {loading ? 'Processing...' : '🔄 Re-detect Spots'}
               </button>
               <Link 
                 href="/admin" 
