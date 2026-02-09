@@ -2,7 +2,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
@@ -16,8 +16,51 @@ const SPOT_TYPES = [
   { id: 'ada_ev', name: 'ADA + EV', color: '#1e40af' }
 ];
 
+// Occupancy icons configuration
+const OCCUPANCY_ICONS = {
+  company: {
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" /></svg>',
+    color: '#ffffff', // White icon on colored dot
+    title: 'Company-Occupied'
+  },
+  person: {
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>',
+    color: '#ffffff', // White icon on colored dot
+    title: 'Person-Occupied'
+  }
+};
+
+// Helper function to determine occupancy status
+const getOccupancyStatus = (spot) => {
+  const hasCompany = spot.companyName && spot.companyName !== 'Unassigned';
+  const hasPerson = spot.parkerName;
+  
+  if (hasCompany) {
+    return {
+      type: 'company',
+      icon: OCCUPANCY_ICONS.company,
+      description: `Occupied by: ${spot.companyName}`
+    };
+  }
+  
+  if (hasPerson) {
+    return {
+      type: 'person',
+      icon: OCCUPANCY_ICONS.person,
+      description: `Parker: ${spot.parkerName}`
+    };
+  }
+  
+  return {
+    type: null,
+    icon: null,
+    description: 'Available (Unassigned)'
+  };
+};
+
 export default function PublicFloorPage() {
   const params = useParams()
+  const router = useRouter()
   const floorId = params.floorId || '1'
 
   const [svgContent, setSvgContent] = useState('')
@@ -29,6 +72,59 @@ export default function PublicFloorPage() {
   const svgRef = useRef(null)
   const containerRef = useRef(null)
   const [svgDimensions, setSvgDimensions] = useState({ width: 1000, height: 800 })
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Navigation functions
+  const goToNextFloor = () => {
+    const nextFloor = parseInt(floorId) + 1
+    router.push(`/floor/${nextFloor}`)
+  }
+
+  const goToPrevFloor = () => {
+    const prevFloor = Math.max(1, parseInt(floorId) - 1)
+    router.push(`/floor/${prevFloor}`)
+  }
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return
+    
+    if (!isFullscreen) {
+      if (containerRef.current.requestFullscreen) {
+        containerRef.current.requestFullscreen()
+      } else if (containerRef.current.webkitRequestFullscreen) {
+        containerRef.current.webkitRequestFullscreen()
+      } else if (containerRef.current.msRequestFullscreen) {
+        containerRef.current.msRequestFullscreen()
+      }
+      setIsFullscreen(true)
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen()
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen()
+      }
+      setIsFullscreen(false)
+    }
+  }
+
+  // Listen for fullscreen change
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('msfullscreenchange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange)
+    }
+  }, [])
 
   // ==================== DETECTION FUNCTIONS ====================
   
@@ -412,7 +508,10 @@ export default function PublicFloorPage() {
           const pos = calculateSpotPosition(spot);
           if (!pos) return null;
 
-          // Determine dot color based on spot type ONLY (not availability)
+          // Get occupancy status
+          const occupancy = getOccupancyStatus(spot);
+          
+          // Determine dot color based on spot type ONLY
           let dotColor = '#9ca3af'; // Default gray for unassigned with no type
           
           if (spot.spotTypeConfig) {
@@ -421,11 +520,10 @@ export default function PublicFloorPage() {
           }
           
           // Determine availability status for tooltip
-          const isUnassigned = spot.companyName === 'Unassigned' || !spot.companyName;
-          const availabilityStatus = isUnassigned ? 'Available (Unassigned)' : `Occupied by: ${spot.companyName}`;
+          const isUnassigned = occupancy.type === null;
           
           // Tooltip text
-          const titleText = `${spot.spotNumber} • ${availabilityStatus}${spot.parkerName ? ` • Parker: ${spot.parkerName}` : ''}${spot.spotTypeConfig ? ` • ${spot.spotTypeConfig.name}` : ''}`;
+          const titleText = `${spot.spotNumber} • ${occupancy.description}${spot.spotTypeConfig ? ` • ${spot.spotTypeConfig.name}` : ''}`;
 
           return (
             <div 
@@ -441,12 +539,26 @@ export default function PublicFloorPage() {
               {/* COLORED DOT INDICATOR - Based on spot type ONLY */}
               <div className="absolute inset-0 flex items-center justify-center z-10">
                 <div 
-                  className="w-4 h-4 rounded-full border-2 border-white shadow-lg opacity-80 group-hover:opacity-100 group-hover:scale-125 transition-all duration-200 pointer-events-none"
+                  className="relative w-4 h-4 rounded-full border-2 border-white shadow-lg opacity-80 group-hover:opacity-100 group-hover:scale-125 transition-all duration-200 pointer-events-none flex items-center justify-center"
                   style={{ 
                     backgroundColor: dotColor,
                     borderColor: 'white'
                   }}
-                ></div>
+                >
+                  {/* OCCUPANCY ICON OVERLAY - centered on the dot */}
+                  {occupancy.icon && (
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{ 
+                        width: '100%', 
+                        height: '100%',
+                        color: occupancy.icon.color,
+                        padding: '3px'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: occupancy.icon.svg }}
+                    />
+                  )}
+                </div>
               </div>
               
               {/* HOVER AREA - Invisible but clickable */}
@@ -477,14 +589,12 @@ export default function PublicFloorPage() {
                 <div className="text-center mb-1">
                   {isUnassigned ? (
                     <span className="text-green-300">Available (Unassigned)</span>
-                  ) : (
+                  ) : occupancy.type === 'company' ? (
                     <span className="text-blue-300">Occupied by: {spot.companyName}</span>
+                  ) : (
+                    <span className="text-purple-300">Parker: {spot.parkerName}</span>
                   )}
                 </div>
-                
-                {spot.parkerName && (
-                  <div className="text-center text-purple-300 mb-1">Parker: {spot.parkerName}</div>
-                )}
                 
                 {spot.spotTypeConfig && (
                   <div className="text-center" style={{ color: spot.spotTypeConfig.color }}>
@@ -536,14 +646,31 @@ export default function PublicFloorPage() {
                     <span className="text-gray-600">{spots.length} parking spots</span>
                   </div>
                   <span className="text-gray-600">
-                    {spots.filter(s => s.companyName !== 'Unassigned').length > 0 && 
-                      `${spots.filter(s => s.companyName !== 'Unassigned').length} occupied`}
+                    {spots.filter(s => getOccupancyStatus(s).type !== null).length > 0 && 
+                      `${spots.filter(s => getOccupancyStatus(s).type !== null).length} occupied`}
                   </span>
                 </div>
               )}
             </div>
             
             <div className="flex flex-wrap gap-2">
+              {/* Navigation buttons */}
+              <button
+                onClick={goToPrevFloor}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm flex items-center gap-1"
+              >
+                ← Back
+              </button>
+              
+              <button
+                onClick={goToNextFloor}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm flex items-center gap-1"
+              >
+                Next →
+              </button>
+              
+             
+              
               <Link 
                 href="/" 
                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm flex items-center gap-2"
@@ -593,17 +720,83 @@ export default function PublicFloorPage() {
             )}
           </div>
           
-          {/* Legend/Help Text - UPDATED */}
-          <div className="absolute bottom-2  bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md text-xs">
-            <div className="text-gray-700 font-medium mb-2">Spot Type Colors:</div>
-            {SPOT_TYPES.map(type => (
-              <div key={type.id} className="flex items-center gap-1 mb-1">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }}></div>
-                <span className="text-gray-700">{type.name}</span>
-              </div>
-            ))}
+
+  <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-2 rounded-lg shadow-md text-xs z-10">
+  <div className="text-gray-700 font-medium mb-2">Space Type Colors</div>
+  <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
+    {SPOT_TYPES.map(type => {
+      // Count spots of this type
+      const spotCount = spots.filter(s => s.spotTypeConfig?.id === type.id).length;
+      
+      // Count occupied spots of this type
+      const occupiedSpots = spots.filter(s => 
+        s.spotTypeConfig?.id === type.id && 
+        getOccupancyStatus(s).type !== null
+      );
+      
+      // Count company spots
+      const companySpots = spots.filter(s => 
+        s.spotTypeConfig?.id === type.id && 
+        getOccupancyStatus(s).type === 'company'
+      );
+      
+      // Count person spots
+      const personSpots = spots.filter(s => 
+        s.spotTypeConfig?.id === type.id && 
+        getOccupancyStatus(s).type === 'person'
+      );
+      
+      return (
+        <div key={type.id} className="flex items-start gap-2 py-1">
+          {/* Color indicator */}
+          <div 
+            className="w-3 h-3 rounded-full flex-shrink-0 mt-0.5" 
+            style={{ backgroundColor: type.color }}
+          ></div>
           
+          {/* Type name and counts */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-700 font-medium">{type.name}</span>
+              <span className="text-gray-500 text-xs">{spotCount}</span>
+            </div>
+            
+            {/* Occupancy indicators */}
+            {(occupiedSpots.length > 0) && (
+              <div className="flex items-center gap-3 mt-1">
+                {companySpots.length > 0 && (
+                  <div className="flex items-center gap-1" title={`${companySpots.length} company-occupied spaces`}>
+                    <div className="w-3 h-3 flex items-center justify-center">
+                      <div 
+                        className="w-2 h-2"
+                        style={{ color: type.color }}
+                        dangerouslySetInnerHTML={{ __html: OCCUPANCY_ICONS.company.svg }}
+                      />
+                    </div>
+                    <span className="text-gray-600 text-xs">{companySpots.length}</span>
+                  </div>
+                )}
+                
+                {personSpots.length > 0 && (
+                  <div className="flex items-center gap-1" title={`${personSpots.length} personally-occupied spaces`}>
+                    <div className="w-3 h-3 flex items-center justify-center">
+                      <div 
+                        className="w-2 h-2"
+                        style={{ color: type.color }}
+                        dangerouslySetInnerHTML={{ __html: OCCUPANCY_ICONS.person.svg }}
+                      />
+                    </div>
+                    <span className="text-gray-600 text-xs">{personSpots.length}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+        </div>
+      );
+    })}
+  </div>
+</div>
         </div>
 
         {/* Selected Spot Panel & Spot List */}
@@ -632,20 +825,9 @@ export default function PublicFloorPage() {
                       <div className="mb-3">
                         <div className="text-sm text-gray-500">Status</div>
                         <div className="font-medium text-gray-700">
-                          {selectedSpot.companyName && selectedSpot.companyName !== 'Unassigned' 
-                            ? `Occupied by: ${selectedSpot.companyName}`
-                            : 'Available (Unassigned)'}
+                          {getOccupancyStatus(selectedSpot).description}
                         </div>
                       </div>
-                      
-                      {selectedSpot.parkerName && (
-                        <div className="mb-3">
-                          <div className="text-sm text-gray-500">Parker</div>
-                          <div className="font-medium text-purple-700">
-                            {selectedSpot.parkerName}
-                          </div>
-                        </div>
-                      )}
                       
                       {selectedSpot.spotTypeConfig && (
                         <div className="mb-3">
@@ -674,16 +856,19 @@ export default function PublicFloorPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-medium text-gray-900">Parking Spots ({spots.length})</h3>
                   <div className="text-sm text-gray-500">
-                    <span className="text-green-600">{spots.filter(s => s.companyName === 'Unassigned').length} available</span>
+                    <span className="text-green-600">{spots.filter(s => getOccupancyStatus(s).type === null).length} available</span>
                     {' • '}
-                    <span>{spots.filter(s => s.companyName !== 'Unassigned').length} occupied</span>
+                    <span className="text-blue-600">{spots.filter(s => getOccupancyStatus(s).type === 'company').length} company</span>
+                    {' • '}
+                    <span className="text-purple-600">{spots.filter(s => getOccupancyStatus(s).type === 'person').length} personal</span>
                   </div>
                 </div>
                 
                 {spots.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto p-1">
                     {spots.map((spot) => {
-                      const isAvailable = spot.companyName === 'Unassigned' || !spot.companyName;
+                      const occupancy = getOccupancyStatus(spot);
+                      const isAvailable = occupancy.type === null;
                       const spotTypeConfig = spot.spotTypeConfig || SPOT_TYPES[0];
                       
                       return (
@@ -694,7 +879,9 @@ export default function PublicFloorPage() {
                               ? 'ring-2 ring-blue-500 border-blue-300 bg-blue-50' 
                               : isAvailable
                               ? 'border-green-300 bg-green-50/30'
-                              : `border-gray-300 bg-gray-50/30`
+                              : occupancy.type === 'company'
+                              ? 'border-blue-300 bg-blue-50/30'
+                              : 'border-purple-300 bg-purple-50/30'
                           }`}
                           style={{
                             borderLeftColor: spotTypeConfig.color,
@@ -704,12 +891,30 @@ export default function PublicFloorPage() {
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full"
-                                style={{ backgroundColor: spotTypeConfig.color }}
-                              ></div>
+                              {/* Spot type color dot with occupancy icon */}
+                              <div className="relative w-4 h-4">
+                                <div 
+                                  className="w-full h-full rounded-full"
+                                  style={{ backgroundColor: spotTypeConfig.color }}
+                                >
+                                  {occupancy.icon && (
+                                    <div 
+                                      className="absolute inset-0 flex items-center justify-center"
+                                      style={{ 
+                                        width: '100%', 
+                                        height: '100%',
+                                        color: 'white',
+                                        padding: '2px'
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: occupancy.icon.svg }}
+                                    />
+                                  )}
+                                </div>
+                              </div>
                               <span className={`text-lg font-bold ${
-                                isAvailable ? 'text-green-700' : 'text-gray-700'
+                                isAvailable ? 'text-green-700' : 
+                                occupancy.type === 'company' ? 'text-blue-700' : 
+                                'text-purple-700'
                               }`}>
                                 {spot.spotNumber}
                               </span>
@@ -717,7 +922,9 @@ export default function PublicFloorPage() {
                           </div>
                           
                           <div className="text-sm font-medium text-gray-900 truncate mb-1" title={spot.companyName}>
-                            {!isAvailable ? spot.companyName : 'Available'}
+                            {occupancy.type === 'company' ? spot.companyName : 
+                             occupancy.type === 'person' ? 'Personal Spot' : 
+                             'Available'}
                           </div>
                           
                           {spot.spotTypeConfig && (
@@ -726,13 +933,9 @@ export default function PublicFloorPage() {
                             </div>
                           )}
                           
-                          {spot.parkerName ? (
-                            <div className="text-xs text-purple-600 truncate" title={spot.parkerName}>
+                          {spot.parkerName && occupancy.type !== 'company' && (
+                            <div className="text-xs text-purple-600 truncate">
                               Parker: {spot.parkerName}
-                            </div>
-                          ) : (
-                            <div className="text-xs text-gray-500 italic">
-                              {isAvailable ? 'Open for assignment' : 'Company spot'}
                             </div>
                           )}
                         </div>

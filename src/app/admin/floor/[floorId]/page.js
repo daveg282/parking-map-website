@@ -2,7 +2,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
@@ -19,7 +19,7 @@ const SPOT_TYPES = [
 export default function AdminFloorPage() {
   const params = useParams()
   const floorId = params.floorId || '1'
-
+ const router = useRouter()
   const [svgContent, setSvgContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -443,6 +443,15 @@ export default function AdminFloorPage() {
     setEditingParker(false);
     setEditingSpotNumber(false);
   };
+  const goToNextFloor = () => {
+  const nextFloor = parseInt(floorId) + 1
+  router.push(`/admin/floor/${nextFloor}`)
+}
+
+const goToPrevFloor = () => {
+  const prevFloor = Math.max(1, parseInt(floorId) - 1)
+  router.push(`/admin/floor/${prevFloor}`)
+}
 
   // SAVE Company Name
   const saveCompanyName = async () => {
@@ -890,6 +899,19 @@ export default function AdminFloorPage() {
             </div>
             
             <div className="flex flex-wrap gap-2">
+              <button
+           onClick={goToPrevFloor}
+           className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+          >
+       ← Back
+       </button>
+
+     <button
+     onClick={goToNextFloor}
+   className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+   >
+   Next →
+   </button>
               <button
                 onClick={handleRedetectSpots}
                 className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
