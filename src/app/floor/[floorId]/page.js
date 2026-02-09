@@ -6,6 +6,16 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
+// Spot type configurations - no icons
+const SPOT_TYPES = [
+  { id: 'regular', name: 'Regular', color: '#fbbf24' },
+  { id: 'reserved', name: 'Reserved', color: '#ef4444' },
+  { id: 'compact', name: 'Compact', color: '#a855f7' },
+  { id: 'ev', name: 'EV', color: '#10b981' },
+  { id: 'ada', name: 'ADA', color: '#3b82f6' },
+  { id: 'ada_ev', name: 'ADA + EV', color: '#1e40af' }
+];
+
 export default function PublicFloorPage() {
   const params = useParams()
   const floorId = params.floorId || '1'
@@ -196,6 +206,8 @@ export default function PublicFloorPage() {
           parkerName: null, // Will be overridden by database
           spotNumber: cleanText || `SPOT-${shapeIndex + 1}`, // Use detected text or generate
           originalSpotNumber: cleanText,
+          spotType: 'regular', // Default spot type
+          spotTypeConfig: SPOT_TYPES[0], // Default to regular
           
           hasText: !!cleanText,
           shapeIndex: shapeIndex,
@@ -290,6 +302,10 @@ export default function PublicFloorPage() {
           );
           
           if (matchingDbSpot) {
+            // Get spot type config
+            const spotType = matchingDbSpot.spot_type || 'regular';
+            const spotTypeConfig = SPOT_TYPES.find(t => t.id === spotType) || SPOT_TYPES[0];
+            
             // Map database fields to the new structure (same as admin page)
             return {
               ...detectedSpot,
@@ -300,6 +316,8 @@ export default function PublicFloorPage() {
               companyName: matchingDbSpot.display_label || 'Unassigned', // Company Name
               parkerName: matchingDbSpot.custom_label, // Parker Name
               spotNumber: matchingDbSpot.original_label || detectedSpot.spotNumber, // Spot Number
+              spotType: spotType, // Add spot type
+              spotTypeConfig: spotTypeConfig, // Add spot type config for colors
               
               originalSpotNumber: matchingDbSpot.original_label || detectedSpot.originalSpotNumber,
               isCustomLabeled: matchingDbSpot.is_custom_labeled,
@@ -386,77 +404,105 @@ export default function PublicFloorPage() {
   // ==================== RENDER FUNCTIONS ====================
 
   const renderInteractiveOverlay = () => {
-  if (!svgContent || spots.length === 0) return null;
+    if (!svgContent || spots.length === 0) return null;
 
-  return (
-    <div className="absolute inset-0 pointer-events-none">
-      {spots.map((spot) => {
-        const pos = calculateSpotPosition(spot);
-        if (!pos) return null;
+    return (
+      <div className="absolute inset-0 pointer-events-none">
+        {spots.map((spot) => {
+          const pos = calculateSpotPosition(spot);
+          if (!pos) return null;
 
-        // Determine what text to show on the spot
-        const displayText = spot.spotNumber; // Show spot number by default
-        const titleText = `${spot.spotNumber}${spot.companyName && spot.companyName !== 'Unassigned' ? ` • ${spot.companyName}` : ''}${spot.parkerName ? ` • 👤 ${spot.parkerName}` : ''}`;
+          // Determine dot color based on spot type ONLY (not availability)
+          let dotColor = '#9ca3af'; // Default gray for unassigned with no type
+          
+          if (spot.spotTypeConfig) {
+            // Use spot type color for all spots
+            dotColor = spot.spotTypeConfig.color;
+          }
+          
+          // Determine availability status for tooltip
+          const isUnassigned = spot.companyName === 'Unassigned' || !spot.companyName;
+          const availabilityStatus = isUnassigned ? 'Available (Unassigned)' : `Occupied by: ${spot.companyName}`;
+          
+          // Tooltip text
+          const titleText = `${spot.spotNumber} • ${availabilityStatus}${spot.parkerName ? ` • Parker: ${spot.parkerName}` : ''}${spot.spotTypeConfig ? ` • ${spot.spotTypeConfig.name}` : ''}`;
 
-        return (
-          <div 
-            key={spot.id} 
-            className="absolute group" 
-            style={{
-              left: pos.left,
-              top: pos.top,
-              width: pos.width,
-              height: pos.height,
-            }}
-          >
-            {/* GREEN SPOT INDICATOR - Always visible, below hover area */}
-            <div className="absolute inset-0 flex items-center justify-center z-10">
-              <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg opacity-80 group-hover:opacity-100 group-hover:scale-125 transition-all duration-200 pointer-events-none"></div>
-            </div>
-            
-            {/* HOVER AREA - Invisible but clickable */}
-            <button
-              className="absolute inset-0 cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-green-500 rounded pointer-events-auto focus:outline-none focus:ring-2 focus:ring-green-500"
+          return (
+            <div 
+              key={spot.id} 
+              className="absolute group" 
               style={{
-                backgroundColor: 'transparent',
+                left: pos.left,
+                top: pos.top,
+                width: pos.width,
+                height: pos.height,
               }}
-              onClick={() => handleSpotClick(spot)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#10b981';
-                e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'transparent';
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-              title={titleText}
             >
-              {/* Invisible area - just for interaction */}
-            </button>
-            
-            {/* TOOLTIP - Renders above everything */}
-            <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg min-w-[180px] z-50">
-              <div className="font-bold text-center mb-1">{spot.spotNumber}</div>
+              {/* COLORED DOT INDICATOR - Based on spot type ONLY */}
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div 
+                  className="w-4 h-4 rounded-full border-2 border-white shadow-lg opacity-80 group-hover:opacity-100 group-hover:scale-125 transition-all duration-200 pointer-events-none"
+                  style={{ 
+                    backgroundColor: dotColor,
+                    borderColor: 'white'
+                  }}
+                ></div>
+              </div>
               
-              {spot.companyName && spot.companyName !== 'Unassigned' && (
-                <div className="text-center text-blue-300 mb-1">🏢 {spot.companyName}</div>
-              )}
+              {/* HOVER AREA - Invisible but clickable */}
+              <button
+                className="absolute inset-0 cursor-pointer transition-all duration-200 border-2 border-transparent rounded pointer-events-auto focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{
+                  backgroundColor: 'transparent',
+                }}
+                onClick={() => handleSpotClick(spot)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = dotColor;
+                  e.currentTarget.style.backgroundColor = `${dotColor}20`; // 20 = ~12.5% opacity
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'transparent';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+                title={titleText}
+              >
+                {/* Invisible area - just for interaction */}
+              </button>
               
-              {spot.parkerName && (
-                <div className="text-center text-purple-300 mb-1">👤 {spot.parkerName}</div>
-              )}
-              
-              {/* Proper downward-pointing triangle arrow */}
-              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2">
-                <div className="w-0 h-0 border-l-6 border-r-6 border-t-6 border-transparent border-t-gray-900"></div>
+              {/* TOOLTIP */}
+              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg min-w-[180px] z-50">
+                <div className="font-bold text-center mb-1">{spot.spotNumber}</div>
+                
+                {/* Availability Status */}
+                <div className="text-center mb-1">
+                  {isUnassigned ? (
+                    <span className="text-green-300">Available (Unassigned)</span>
+                  ) : (
+                    <span className="text-blue-300">Occupied by: {spot.companyName}</span>
+                  )}
+                </div>
+                
+                {spot.parkerName && (
+                  <div className="text-center text-purple-300 mb-1">Parker: {spot.parkerName}</div>
+                )}
+                
+                {spot.spotTypeConfig && (
+                  <div className="text-center" style={{ color: spot.spotTypeConfig.color }}>
+                    {spot.spotTypeConfig.name}
+                  </div>
+                )}
+                
+                {/* Downward-pointing triangle arrow */}
+                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2">
+                  <div className="w-0 h-0 border-l-6 border-r-6 border-t-6 border-transparent border-t-gray-900"></div>
+                </div>
               </div>
             </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-};
+          )
+        })}
+      </div>
+    )
+  };
 
   // ==================== MAIN RENDER ====================
 
@@ -490,8 +536,8 @@ export default function PublicFloorPage() {
                     <span className="text-gray-600">{spots.length} parking spots</span>
                   </div>
                   <span className="text-gray-600">
-                    {spots.filter(s => s.parkerName).length > 0 && 
-                      `${spots.filter(s => s.parkerName).length} assigned`}
+                    {spots.filter(s => s.companyName !== 'Unassigned').length > 0 && 
+                      `${spots.filter(s => s.companyName !== 'Unassigned').length} occupied`}
                   </span>
                 </div>
               )}
@@ -513,7 +559,7 @@ export default function PublicFloorPage() {
           ref={containerRef}
           className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden relative"
         >
-          <div className="w-full h-[800px] relative overflow-hidden">
+          <div className="w-full h-[900px] relative overflow-hidden">
             {error && !loading && (
               <div className="text-center p-8 absolute inset-0 flex items-center justify-center bg-white">
                 <div>
@@ -526,10 +572,10 @@ export default function PublicFloorPage() {
 
             {!loading && !error && svgContent && (
               <div className="relative w-full h-full">
-               <div 
-  className="absolute inset-0 w-full h-full flex items-center justify-center p-4"
-  style={{ backgroundColor: 'white' }}
->
+                <div 
+                  className="absolute inset-0 w-full h-full flex items-center justify-center"
+                  style={{ backgroundColor: 'white' }}
+                >
                   <div 
                     ref={svgRef}
                     className="w-full h-full max-w-full max-h-full"
@@ -547,13 +593,16 @@ export default function PublicFloorPage() {
             )}
           </div>
           
-          {/* Legend/Help Text */}
-          <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md text-xs">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-3 h-3 bg-green-500 rounded-full border border-white"></div>
-              <span className="text-gray-700">Clickable parking spots</span>
-            </div>
-            <div className="text-gray-500">Hover over green dots for details</div>
+          {/* Legend/Help Text - UPDATED */}
+          <div className="absolute bottom-2  bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md text-xs">
+            <div className="text-gray-700 font-medium mb-2">Spot Type Colors:</div>
+            {SPOT_TYPES.map(type => (
+              <div key={type.id} className="flex items-center gap-1 mb-1">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }}></div>
+                <span className="text-gray-700">{type.name}</span>
+              </div>
+            ))}
+          
           </div>
         </div>
 
@@ -576,27 +625,36 @@ export default function PublicFloorPage() {
                   
                   <div className="space-y-4">
                     <div className="p-3 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900 mb-2">
+                      <div className="text-2xl font-bold text-gray-900 mb-3">
                         {selectedSpot.spotNumber}
                       </div>
                       
                       <div className="mb-3">
-                        <div className="text-sm text-gray-500">Company</div>
+                        <div className="text-sm text-gray-500">Status</div>
                         <div className="font-medium text-gray-700">
                           {selectedSpot.companyName && selectedSpot.companyName !== 'Unassigned' 
-                            ? `🏢 ${selectedSpot.companyName}`
-                            : 'No company assigned'}
+                            ? `Occupied by: ${selectedSpot.companyName}`
+                            : 'Available (Unassigned)'}
                         </div>
                       </div>
                       
-                      <div>
-                        <div className="text-sm text-gray-500">Parker</div>
-                        <div className="font-medium text-purple-700">
-                          {selectedSpot.parkerName 
-                            ? `👤 ${selectedSpot.parkerName}`
-                            : 'No parker assigned'}
+                      {selectedSpot.parkerName && (
+                        <div className="mb-3">
+                          <div className="text-sm text-gray-500">Parker</div>
+                          <div className="font-medium text-purple-700">
+                            {selectedSpot.parkerName}
+                          </div>
                         </div>
-                      </div>
+                      )}
+                      
+                      {selectedSpot.spotTypeConfig && (
+                        <div className="mb-3">
+                          <div className="text-sm text-gray-500">Spot Type</div>
+                          <div className="font-medium" style={{ color: selectedSpot.spotTypeConfig.color }}>
+                            {selectedSpot.spotTypeConfig.name}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -604,76 +662,82 @@ export default function PublicFloorPage() {
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                   <div className="text-gray-400 mb-2">👆</div>
                   <p className="text-sm text-gray-600">
-                    Click on any green dot to view spot details
+                    Click on any colored dot to view spot details
                   </p>
                 </div>
               )}
             </div>
 
-            {/* All Spots List - SIMPLIFIED (like admin page) */}
+            {/* All Spots List */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-medium text-gray-900">Parking Spots ({spots.length})</h3>
                   <div className="text-sm text-gray-500">
-                    <span className="text-purple-600">{spots.filter(s => s.parkerName).length} assigned</span>
+                    <span className="text-green-600">{spots.filter(s => s.companyName === 'Unassigned').length} available</span>
                     {' • '}
-                    <span className="text-green-600">{spots.filter(s => s.isFromDatabase).length} in system</span>
+                    <span>{spots.filter(s => s.companyName !== 'Unassigned').length} occupied</span>
                   </div>
                 </div>
                 
                 {spots.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto p-1">
-                    {spots.map((spot) => (
-                      <div
-                        key={spot.id}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                          selectedSpot?.id === spot.id 
-                            ? 'ring-2 ring-blue-500 border-blue-300 bg-blue-50' 
-                            : spot.parkerName
-                            ? 'border-purple-300 bg-purple-50/50'
-                            : spot.isFromDatabase
-                            ? 'border-green-300 bg-green-50/30'
-                            : 'border-yellow-300 bg-yellow-50/30'
-                        }`}
-                        onClick={() => handleSpotClick(spot)}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-lg font-bold ${
-                              spot.parkerName ? 'text-purple-700' : 
-                              spot.isFromDatabase ? 'text-green-700' : 'text-yellow-700'
-                            }`}>
-                              {spot.spotNumber}
-                            </span>
+                    {spots.map((spot) => {
+                      const isAvailable = spot.companyName === 'Unassigned' || !spot.companyName;
+                      const spotTypeConfig = spot.spotTypeConfig || SPOT_TYPES[0];
+                      
+                      return (
+                        <div
+                          key={spot.id}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                            selectedSpot?.id === spot.id 
+                              ? 'ring-2 ring-blue-500 border-blue-300 bg-blue-50' 
+                              : isAvailable
+                              ? 'border-green-300 bg-green-50/30'
+                              : `border-gray-300 bg-gray-50/30`
+                          }`}
+                          style={{
+                            borderLeftColor: spotTypeConfig.color,
+                            borderLeftWidth: '4px'
+                          }}
+                          onClick={() => handleSpotClick(spot)}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: spotTypeConfig.color }}
+                              ></div>
+                              <span className={`text-lg font-bold ${
+                                isAvailable ? 'text-green-700' : 'text-gray-700'
+                              }`}>
+                                {spot.spotNumber}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            {spot.isFromDatabase && (
-                              <div className="text-xs text-green-600" title="In system">💾</div>
-                            )}
-                            {spot.parkerName && (
-                              <div className="text-xs text-purple-600">👤</div>
-                            )}
+                          
+                          <div className="text-sm font-medium text-gray-900 truncate mb-1" title={spot.companyName}>
+                            {!isAvailable ? spot.companyName : 'Available'}
                           </div>
+                          
+                          {spot.spotTypeConfig && (
+                            <div className="text-xs text-gray-600 mb-1">
+                              {spot.spotTypeConfig.name}
+                            </div>
+                          )}
+                          
+                          {spot.parkerName ? (
+                            <div className="text-xs text-purple-600 truncate" title={spot.parkerName}>
+                              Parker: {spot.parkerName}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500 italic">
+                              {isAvailable ? 'Open for assignment' : 'Company spot'}
+                            </div>
+                          )}
                         </div>
-                        
-                        <div className="text-sm font-medium text-gray-900 truncate mb-1" title={spot.companyName}>
-                          {spot.companyName && spot.companyName !== 'Unassigned' 
-                            ? spot.companyName 
-                            : 'No company'}
-                        </div>
-                        
-                        {spot.parkerName ? (
-                          <div className="text-xs text-purple-600 truncate" title={spot.parkerName}>
-                            👤 {spot.parkerName}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-500 italic">
-                            Available
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">

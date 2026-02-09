@@ -6,6 +6,16 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
+// Spot type configurations - only used for unoccupied borders
+const SPOT_TYPES = [
+  { id: 'regular', name: 'Regular', color: '#fbbf24', icon: '🚗', description: 'Standard parking spot' },
+  { id: 'reserved', name: 'Reserved', color: '#ef4444', icon: '⭐', description: 'Reserved parking' },
+  { id: 'compact', name: 'Compact', color: '#a855f7', icon: '🅿️', description: 'Compact car spot' },
+  { id: 'ev', name: 'EV', color: '#10b981', icon: '🔋', description: 'Electric vehicle charging' },
+  { id: 'ada', name: 'ADA', color: '#3b82f6', icon: '♿', description: 'Handicap accessible' },
+  { id: 'ada_ev', name: 'ADA + EV', color: '#1e40af', icon: '♿🔌', description: 'Handicap with EV charging' }
+];
+
 export default function AdminFloorPage() {
   const params = useParams()
   const floorId = params.floorId || '1'
@@ -18,9 +28,11 @@ export default function AdminFloorPage() {
   const [editingCompany, setEditingCompany] = useState(false)
   const [editingParker, setEditingParker] = useState(false)
   const [editingSpotNumber, setEditingSpotNumber] = useState(false)
+  const [editingSpotType, setEditingSpotType] = useState(false)
   const [companyName, setCompanyName] = useState('')
   const [parkerName, setParkerName] = useState('')
   const [spotNumber, setSpotNumber] = useState('')
+  const [spotType, setSpotType] = useState('regular')
   const [containerRect, setContainerRect] = useState(null)
   const [isInitialDetectionDone, setIsInitialDetectionDone] = useState(false)
   const svgRef = useRef(null)
@@ -48,7 +60,7 @@ export default function AdminFloorPage() {
     loadSVG()
   }, [floorId])
 
-  // ==================== DETECTION FUNCTIONS ====================
+  // ==================== DETECTION - ONLY YELLOW ====================
   
   const normalizeColor = (color) => {
     if (!color) return '';
@@ -72,112 +84,97 @@ export default function AdminFloorPage() {
   };
 
   const detectSpotsFromSVG = (svgElement) => {
-  console.log('=== DETECTING SPOTS FROM SVG (All Colors) ===');
-  
-  const spots = [];
-  const allElements = svgElement.querySelectorAll('*');
-  
-  // Find all elements that could be parking spots
-  allElements.forEach((element, index) => {
-    if (element.tagName.toLowerCase() !== 'rect' && 
-        element.tagName.toLowerCase() !== 'polygon' && 
-        element.tagName.toLowerCase() !== 'path' &&
-        element.tagName.toLowerCase() !== 'circle' &&
-        element.tagName.toLowerCase() !== 'ellipse') {
-      return;
-    }
+    console.log('=== DETECTING YELLOW PARKING SPOTS ONLY ===');
     
-    try {
-      const computedStyle = window.getComputedStyle(element);
-      const fillColor = computedStyle.fill;
+    const spots = [];
+    const allElements = svgElement.querySelectorAll('*');
+    
+    allElements.forEach((element, index) => {
+      if (element.tagName.toLowerCase() !== 'rect' && 
+          element.tagName.toLowerCase() !== 'polygon' && 
+          element.tagName.toLowerCase() !== 'path' &&
+          element.tagName.toLowerCase() !== 'circle' &&
+          element.tagName.toLowerCase() !== 'ellipse') {
+        return;
+      }
       
-      if (!fillColor || fillColor === 'none') return;
-      
-      // Check if it's a cyan OR yellow spot (KEEP BOTH)
-      const normalizedColor = normalizeColor(fillColor);
-      const isCyan = normalizedColor.includes('80ffff') || 
-                    normalizedColor.includes('7ffffe') || 
-                    normalizedColor.includes('81ffff') ||
-                    normalizedColor === '#80ffff';
-      const isYellow = normalizedColor.includes('ffff80') || 
-                      normalizedColor.includes('ffff7f') || 
-                      normalizedColor.includes('ffff81') ||
-                      normalizedColor === '#ffff80';
-      
-      // KEEP BOTH COLORS - remove this check entirely
-      // if (!isCyan && !isYellow) return;
-      
-      // Instead, check if it's ANY colored parking spot (not just cyan/yellow)
-      // You can add more colors here if needed
-      if (!isCyan && !isYellow) return;
-      
-      const bbox = element.getBBox();
-      
-      // Filter out very small elements
-      if (bbox.width < 15 || bbox.height < 15) return;
-      
-      // REMOVED: The part that finds nearby text elements for labels
-      // This is where we were getting "P1", "P2" labels
-      // We're removing this completely
-      
-      // Get screen coordinates
-      const svgPoint = svgElement.createSVGPoint();
-      const points = [
-        { x: bbox.x, y: bbox.y },
-        { x: bbox.x + bbox.width, y: bbox.y },
-        { x: bbox.x, y: bbox.y + bbox.height },
-        { x: bbox.x + bbox.width, y: bbox.y + bbox.height }
-      ];
-      
-      const screenPoints = points.map(point => {
-        svgPoint.x = point.x;
-        svgPoint.y = point.y;
-        return svgPoint.matrixTransform(svgElement.getScreenCTM());
-      });
-      
-      const screenX = Math.min(...screenPoints.map(p => p.x));
-      const screenY = Math.min(...screenPoints.map(p => p.y));
-      const screenWidth = Math.max(...screenPoints.map(p => p.x)) - screenX;
-      const screenHeight = Math.max(...screenPoints.map(p => p.y)) - screenY;
-      
-      const spot = {
-        id: `detected_${floorId}_${index}_${Date.now()}`,
-        svgX: bbox.x,
-        svgY: bbox.y,
-        svgWidth: bbox.width,
-        svgHeight: bbox.height,
-        screenX,
-        screenY,
-        screenWidth,
-        screenHeight,
-        color: normalizedColor,
-        type: isCyan ? 'cyan' : 'yellow',
-        elementType: element.tagName.toLowerCase(),
+      try {
+        const computedStyle = window.getComputedStyle(element);
+        const fillColor = computedStyle.fill;
         
-        // REMOVED: spotNumber detection from text
-        // Now we'll use a generated number based on position
-        companyName: 'Unassigned',
-        parkerName: null,
-        spotNumber: `SPOT-${index + 1}`, // Generate generic spot number
-        originalSpotNumber: null,
-        hasText: false, // Always false since we're not detecting text
-        rawElement: element,
-        shapeIndex: index,
-        isCustomLabeled: false,
-        isFromDatabase: false,
-        dbId: null
-      };
-      
-      spots.push(spot);
-      
-    } catch (err) {
-      console.error(`Error processing element ${index}:`, err);
-    }
-  });
-  
-  console.log(`=== DETECTED ${spots.length} SPOTS (No Text Labels) ===`);
-  return spots;
-};
+        if (!fillColor || fillColor === 'none') return;
+        
+        // Check if it's a YELLOW spot ONLY
+        const normalizedColor = normalizeColor(fillColor);
+        const isYellow = normalizedColor.includes('ffff80') || 
+                        normalizedColor.includes('ffff7f') || 
+                        normalizedColor.includes('ffff81') ||
+                        normalizedColor === '#ffff80' ||
+                        normalizedColor === '#ff0' ||
+                        normalizedColor === '#ffff00';
+        
+        if (!isYellow) return;
+        
+        const bbox = element.getBBox();
+        
+        // Filter out very small elements
+        if (bbox.width < 15 || bbox.height < 15) return;
+        
+        // Get screen coordinates
+        const svgPoint = svgElement.createSVGPoint();
+        const points = [
+          { x: bbox.x, y: bbox.y },
+          { x: bbox.x + bbox.width, y: bbox.y },
+          { x: bbox.x, y: bbox.y + bbox.height },
+          { x: bbox.x + bbox.width, y: bbox.y + bbox.height }
+        ];
+        
+        const screenPoints = points.map(point => {
+          svgPoint.x = point.x;
+          svgPoint.y = point.y;
+          return svgPoint.matrixTransform(svgElement.getScreenCTM());
+        });
+        
+        const screenX = Math.min(...screenPoints.map(p => p.x));
+        const screenY = Math.min(...screenPoints.map(p => p.y));
+        const screenWidth = Math.max(...screenPoints.map(p => p.x)) - screenX;
+        const screenHeight = Math.max(...screenPoints.map(p => p.y)) - screenY;
+        
+        const spot = {
+          id: `detected_${floorId}_${index}_${Date.now()}`,
+          svgX: bbox.x,
+          svgY: bbox.y,
+          svgWidth: bbox.width,
+          svgHeight: bbox.height,
+          screenX,
+          screenY,
+          screenWidth,
+          screenHeight,
+          color: normalizedColor,
+          type: 'regular',
+          elementType: element.tagName.toLowerCase(),
+          companyName: 'Unassigned',
+          parkerName: null,
+          spotNumber: `SPOT-${index + 1}`,
+          originalSpotNumber: null,
+          hasText: false,
+          rawElement: element,
+          shapeIndex: index,
+          isCustomLabeled: false,
+          isFromDatabase: false,
+          dbId: null
+        };
+        
+        spots.push(spot);
+        
+      } catch (err) {
+        console.error(`Error processing element ${index}:`, err);
+      }
+    });
+    
+    console.log(`=== DETECTED ${spots.length} YELLOW SPOTS ===`);
+    return spots;
+  };
 
   // ==================== MAIN FLOW ====================
   
@@ -194,11 +191,11 @@ export default function AdminFloorPage() {
       
       try {
         // STEP 1: DETECT spots from SVG
-        console.log('1️⃣ DETECT: Scanning SVG for parking spots...');
+        console.log('1️⃣ DETECT: Scanning SVG for YELLOW parking spots...');
         const detectedSpots = detectSpotsFromSVG(svgElement);
         
         if (detectedSpots.length === 0) {
-          console.log('❌ No spots detected in SVG');
+          console.log('❌ No yellow spots detected in SVG');
           setSpots([]);
           setIsInitialDetectionDone(true);
           return;
@@ -225,7 +222,6 @@ export default function AdminFloorPage() {
         const existingSpotMap = new Map();
         const spotsToSave = [];
         
-        // Create map of existing spots by position
         if (existingSpots) {
           existingSpots.forEach(spot => {
             const key = `${Math.round(spot.svg_x)}_${Math.round(spot.svg_y)}`;
@@ -233,27 +229,24 @@ export default function AdminFloorPage() {
           });
         }
         
-        // Check each detected spot
         detectedSpots.forEach(detectedSpot => {
           const key = `${Math.round(detectedSpot.svgX)}_${Math.round(detectedSpot.svgY)}`;
           const existingSpot = existingSpotMap.get(key);
           
           if (!existingSpot) {
-            // This is a NEW spot - add to save list
             spotsToSave.push({
               floor_id: floorId,
               spot_identifier: `spot_${detectedSpot.svgX}_${detectedSpot.svgY}`,
-              // NEW MAPPING:
-              display_label: detectedSpot.companyName || 'Unassigned', // Company Name
-              custom_label: detectedSpot.parkerName || null,           // Parker Name
-              original_label: detectedSpot.spotNumber || 'Unlabeled',  // Spot Number
+              display_label: detectedSpot.companyName || 'Unassigned',
+              custom_label: detectedSpot.parkerName || null,
+              original_label: detectedSpot.spotNumber || 'Unlabeled',
               color: detectedSpot.color,
               spot_type: detectedSpot.type,
               svg_x: detectedSpot.svgX,
               svg_y: detectedSpot.svgY,
               svg_width: detectedSpot.svgWidth,
               svg_height: detectedSpot.svgHeight,
-              is_custom_labeled: !!detectedSpot.parkerName, // Has parker name?
+              is_custom_labeled: !!detectedSpot.parkerName,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             });
@@ -295,27 +288,27 @@ export default function AdminFloorPage() {
         // STEP 6: MERGE detected spots with database data
         console.log('6️⃣ MERGE: Creating final spot list...');
         const finalSpots = detectedSpots.map(detectedSpot => {
-          // Find matching spot in database by position
           const matchingDbSpot = allDatabaseSpots?.find(dbSpot => 
             Math.abs(dbSpot.svg_x - detectedSpot.svgX) < 5 && 
             Math.abs(dbSpot.svg_y - detectedSpot.svgY) < 5
           );
           
           if (matchingDbSpot) {
-            // Use database data with NEW FIELD MAPPING
+            const spotType = matchingDbSpot.spot_type || 'regular';
+            const spotTypeConfig = SPOT_TYPES.find(t => t.id === spotType) || SPOT_TYPES[0];
+            
             return {
               id: matchingDbSpot.id,
               dbId: matchingDbSpot.id,
               spot_identifier: matchingDbSpot.spot_identifier,
-              
-              // NEW MAPPING:
-              companyName: matchingDbSpot.display_label || 'Unassigned', // Company Name
-              parkerName: matchingDbSpot.custom_label,                   // Parker Name
-              spotNumber: matchingDbSpot.original_label || 'Unlabeled',  // Spot Number
-              
+              companyName: matchingDbSpot.display_label || 'Unassigned',
+              parkerName: matchingDbSpot.custom_label,
+              spotNumber: matchingDbSpot.original_label || 'Unlabeled',
+              spotType: spotType,
+              spotTypeConfig: spotTypeConfig,
               originalSpotNumber: detectedSpot.originalSpotNumber,
               color: matchingDbSpot.color,
-              type: matchingDbSpot.spot_type,
+              type: 'yellow',
               svgX: matchingDbSpot.svg_x,
               svgY: matchingDbSpot.svg_y,
               svgWidth: matchingDbSpot.svg_width,
@@ -333,10 +326,11 @@ export default function AdminFloorPage() {
             };
           }
           
-          // Should not happen after saving, but just in case
           return {
             ...detectedSpot,
-            isFromDatabase: false
+            isFromDatabase: false,
+            spotType: 'regular',
+            spotTypeConfig: SPOT_TYPES[0]
           };
         });
         
@@ -352,7 +346,7 @@ export default function AdminFloorPage() {
         console.log('7️⃣ DISPLAY: Rendering spots...');
         console.log(`📊 Total spots: ${finalSpots.length}`);
         console.log(`💾 In database: ${finalSpots.filter(s => s.isFromDatabase).length}`);
-        console.log(`👤 With parker names: ${finalSpots.filter(s => s.parkerName).length}`);
+        console.log(`🏢 Occupied: ${finalSpots.filter(s => s.companyName !== 'Unassigned').length}`);
         console.log('✅ ===== FLOW COMPLETE =====');
         
         setSpots(finalSpots);
@@ -415,6 +409,7 @@ export default function AdminFloorPage() {
     setCompanyName(spot.companyName || 'Unassigned');
     setParkerName(spot.parkerName || '');
     setSpotNumber(spot.spotNumber || '');
+    setSpotType(spot.spotType || 'regular');
   };
 
   const startEditingCompany = () => {
@@ -422,6 +417,7 @@ export default function AdminFloorPage() {
     setEditingCompany(true);
     setEditingParker(false);
     setEditingSpotNumber(false);
+    setEditingSpotType(false);
   };
 
   const startEditingParker = () => {
@@ -429,6 +425,7 @@ export default function AdminFloorPage() {
     setEditingParker(true);
     setEditingCompany(false);
     setEditingSpotNumber(false);
+    setEditingSpotType(false);
   };
 
   const startEditingSpotNumber = () => {
@@ -436,9 +433,18 @@ export default function AdminFloorPage() {
     setEditingSpotNumber(true);
     setEditingCompany(false);
     setEditingParker(false);
+    setEditingSpotType(false);
   };
 
-  // SAVE Company Name (display_label)
+  const startEditingSpotType = () => {
+    if (!selectedSpot) return;
+    setEditingSpotType(true);
+    setEditingCompany(false);
+    setEditingParker(false);
+    setEditingSpotNumber(false);
+  };
+
+  // SAVE Company Name
   const saveCompanyName = async () => {
     if (!selectedSpot || !selectedSpot.dbId) return;
     
@@ -481,7 +487,7 @@ export default function AdminFloorPage() {
     }
   };
 
-  // SAVE Parker Name (custom_label)
+  // SAVE Parker Name
   const saveParkerName = async () => {
     if (!selectedSpot || !selectedSpot.dbId) return;
     
@@ -531,7 +537,7 @@ export default function AdminFloorPage() {
     }
   };
 
-  // SAVE Spot Number (original_label) - FIXED VERSION
+  // SAVE Spot Number
   const saveSpotNumber = async () => {
     if (!selectedSpot || !selectedSpot.dbId) {
       alert('⚠️ Please wait for the spot to be saved to the database first');
@@ -541,7 +547,6 @@ export default function AdminFloorPage() {
     try {
       const spotNumToSave = spotNumber.trim() || 'Unlabeled';
       
-      // Prevent saving if the value hasn't changed
       if (spotNumToSave === selectedSpot.spotNumber) {
         setEditingSpotNumber(false);
         return;
@@ -583,13 +588,62 @@ export default function AdminFloorPage() {
     }
   };
 
+  // SAVE Spot Type
+  const saveSpotType = async () => {
+    if (!selectedSpot || !selectedSpot.dbId) {
+      alert('⚠️ Please wait for the spot to be saved to the database first');
+      return;
+    }
+    
+    try {
+      const spotTypeToSave = spotType || 'regular';
+      const spotTypeConfig = SPOT_TYPES.find(t => t.id === spotTypeToSave) || SPOT_TYPES[0];
+      
+      const { error } = await supabase
+        .from('parking_spots')
+        .update({
+          spot_type: spotTypeToSave,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedSpot.dbId)
+      
+      if (error) throw error;
+      
+      // Update local state
+      const updatedSpots = spots.map(spot => {
+        if (spot.dbId === selectedSpot.dbId) {
+          return {
+            ...spot,
+            spotType: spotTypeToSave,
+            spotTypeConfig: spotTypeConfig
+          };
+        }
+        return spot;
+      });
+      
+      setSpots(updatedSpots);
+      setSelectedSpot(prev => ({
+        ...prev,
+        spotType: spotTypeToSave,
+        spotTypeConfig: spotTypeConfig
+      }));
+      setEditingSpotType(false);
+      
+      alert(`✅ Spot type updated to: "${spotTypeConfig.name}"`);
+      
+    } catch (error) {
+      console.error('Error saving spot type:', error);
+      alert('❌ Failed to update spot type: ' + error.message);
+    }
+  };
+
   // ==================== MANUAL RE-DETECTION ====================
 
   const handleRedetectSpots = async () => {
     if (!svgRef.current) return;
     
     const confirmed = window.confirm(
-      '🔄 MANUAL RE-DETECTION\n\nThis will:\n1. Re-scan SVG for CYAN spots only\n2. Add NEW spots to database\n3. Keep existing company/parker/spot info\n\nContinue?'
+      '🔄 MANUAL RE-DETECTION\n\nThis will:\n1. Re-scan SVG for YELLOW spots only\n2. Add NEW spots to database\n3. Keep existing company/parker/spot info\n\nContinue?'
     );
     
     if (!confirmed) return;
@@ -610,7 +664,7 @@ export default function AdminFloorPage() {
       const detectedSpots = detectSpotsFromSVG(svgElement);
       
       if (detectedSpots.length === 0) {
-        alert('❌ No cyan spots detected in SVG');
+        alert('❌ No yellow spots detected in SVG');
         return;
       }
       
@@ -685,6 +739,9 @@ export default function AdminFloorPage() {
         );
         
         if (matchingDbSpot) {
+          const spotType = matchingDbSpot.spot_type || 'regular';
+          const spotTypeConfig = SPOT_TYPES.find(t => t.id === spotType) || SPOT_TYPES[0];
+          
           return {
             ...detectedSpot,
             id: matchingDbSpot.id,
@@ -692,6 +749,8 @@ export default function AdminFloorPage() {
             companyName: matchingDbSpot.display_label || 'Unassigned',
             parkerName: matchingDbSpot.custom_label,
             spotNumber: matchingDbSpot.original_label || 'Unlabeled',
+            spotType: spotType,
+            spotTypeConfig: spotTypeConfig,
             isCustomLabeled: matchingDbSpot.is_custom_labeled,
             isFromDatabase: true
           };
@@ -699,7 +758,9 @@ export default function AdminFloorPage() {
         
         return {
           ...detectedSpot,
-          isFromDatabase: false
+          isFromDatabase: false,
+          spotType: 'regular',
+          spotTypeConfig: SPOT_TYPES[0]
         };
       });
       
@@ -716,7 +777,7 @@ export default function AdminFloorPage() {
       setSelectedSpot(null);
       
       console.log('✅ ===== RE-DETECTION COMPLETE =====');
-      alert(`✅ Re-detection complete!\n\n📊 Results:\n• Cyan spots detected: ${detectedSpots.length}\n• New spots added: ${spotsToSave.length}\n• Total in database: ${finalSpots.filter(s => s.isFromDatabase).length}\n• With parker names: ${finalSpots.filter(s => s.parkerName).length}`);
+      alert(`✅ Re-detection complete!\n\n📊 Results:\n• Yellow spots detected: ${detectedSpots.length}\n• New spots added: ${spotsToSave.length}\n• Total in database: ${finalSpots.filter(s => s.isFromDatabase).length}\n• Occupied spots: ${finalSpots.filter(s => s.companyName !== 'Unassigned').length}`);
       
     } catch (error) {
       console.error('❌ Re-detection error:', error);
@@ -726,7 +787,7 @@ export default function AdminFloorPage() {
     }
   };
 
-  // ==================== RENDER FUNCTIONS ====================
+  // ==================== SIMPLIFIED RENDER FUNCTIONS ====================
 
   const renderInteractiveOverlay = () => {
     if (!svgContent || spots.length === 0 || !containerRect) return null;
@@ -737,47 +798,61 @@ export default function AdminFloorPage() {
           const pos = calculateSpotPosition(spot);
           if (!pos) return null;
 
+          const isOccupied = spot.companyName !== 'Unassigned';
+          const spotTypeConfig = spot.spotTypeConfig || SPOT_TYPES[0];
+          
+          // Determine border color based on state
+          let borderColor = isOccupied ? '#3b82f6' : spotTypeConfig.color; // Blue if occupied, spot type color if not
+          
+          // Tooltip content
+          const tooltipContent = isOccupied 
+            ? `${spot.spotNumber} • ${spot.companyName} • ${spotTypeConfig.name}${spot.parkerName ? ` • Parker: ${spot.parkerName}` : ''}`
+            : `${spot.spotNumber} • ${spotTypeConfig.name} • Available`;
+
           return (
             <div
               key={spot.dbId || spot.id}
-              className="absolute cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-blue-500 hover:bg-blue-500/20 rounded pointer-events-auto group"
+              className="absolute cursor-pointer transition-all duration-200  rounded pointer-events-auto group"
               style={{
                 left: pos.left,
                 top: pos.top,
                 width: pos.width,
                 height: pos.height,
-                backgroundColor: 'transparent',
+                backgroundColor: 'transparent', // No background tint
                 zIndex: 1
               }}
               onClick={() => handleSpotClick(spot)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = spot.parkerName ? '#8b5cf6' : '#06b6d4';
-                e.currentTarget.style.backgroundColor = spot.parkerName ? 'rgba(139, 92, 246, 0.2)' : 'rgba(6, 182, 212, 0.2)';
                 e.currentTarget.style.zIndex = '10';
+                e.currentTarget.style.boxShadow = `0 0 0 2px ${borderColor}`;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'transparent';
-                e.currentTarget.style.backgroundColor = 'transparent';
                 e.currentTarget.style.zIndex = '1';
+                e.currentTarget.style.boxShadow = 'none';
               }}
-              title={`${spot.companyName} • ${spot.spotNumber}${spot.parkerName ? ` • 👤 ${spot.parkerName}` : ''}`}
+              title={tooltipContent}
             >
-              {spot.parkerName && (
-                <div className="absolute -top-6  text-white text-xs mt-1 rounded-full">
-                  👤
+              {/* Company or database icon - SIMPLE ICON WITHOUT BACKGROUND */}
+              {isOccupied && (
+                <div 
+                  className="absolute text-sm"
+                  title="Occupied by company"
+                >
+                  🏢
                 </div>
               )}
               
-              {spot.isFromDatabase && !spot.parkerName && (
-                <div className="absolute -top-4 text-white text-xs mt-1 rounded-full">
+              {!isOccupied && spot.isFromDatabase && (
+                <div className="absolute text-sm">
                   💾
                 </div>
               )}
               
+              {/* Hover overlay with spot number */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className={`text-xs font-bold px-2 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                  spot.parkerName 
-                    ? 'bg-purple-600 text-white' 
+                <div className={`text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                  isOccupied 
+                    ? 'bg-blue-600 text-white' 
                     : 'bg-black/70 text-white'
                 }`}>
                   {spot.spotNumber}
@@ -807,7 +882,7 @@ export default function AdminFloorPage() {
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-sm border border-gray-300"></div>
                     <span className="text-gray-600">
-                      {spots.length} spots • {spots.filter(s => s.parkerName).length} with parkers • {spots.filter(s => s.isFromDatabase).length} in DB
+                      {spots.length} spots • {spots.filter(s => s.companyName !== 'Unassigned').length} occupied
                     </span>
                   </div>
                 </div>
@@ -842,7 +917,7 @@ export default function AdminFloorPage() {
               <div className="text-center absolute inset-0 flex items-center justify-center bg-white z-10">
                 <div>
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Detecting cyan parking spots...</p>
+                  <p className="text-gray-600">Detecting yellow parking spots...</p>
                   <p className="text-sm text-gray-500">Scanning SVG and saving to database</p>
                 </div>
               </div>
@@ -860,9 +935,7 @@ export default function AdminFloorPage() {
 
             {!loading && !error && svgContent && (
               <div ref={svgRef} className="relative w-full h-full overflow-hidden">
-               <div 
-  className="absolute inset-0 w-full h-full flex items-center justify-center p-4 bg-white"
->
+                <div className="absolute inset-0 w-full h-full flex items-center justify-center p-4 bg-white">
                   <div 
                     className="w-full h-full max-w-full max-h-full"
                     dangerouslySetInnerHTML={{ __html: svgContent }}
@@ -894,6 +967,7 @@ export default function AdminFloorPage() {
                         setEditingCompany(false);
                         setEditingParker(false);
                         setEditingSpotNumber(false);
+                        setEditingSpotType(false);
                       }}
                       className="text-sm text-gray-500 hover:text-gray-700"
                     >
@@ -939,9 +1013,13 @@ export default function AdminFloorPage() {
                       ) : (
                         <div className="space-y-2">
                           <div className="p-3 bg-gray-50 rounded-lg">
-                            <div className="text-lg font-bold text-gray-900">{selectedSpot.companyName || 'Unassigned'}</div>
+                            <div className={`text-lg font-bold ${
+                              selectedSpot.companyName !== 'Unassigned' ? 'text-blue-700' : 'text-gray-500'
+                            }`}>
+                              {selectedSpot.companyName}
+                            </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              Displayed on parking map
+                              {selectedSpot.companyName !== 'Unassigned' ? 'Occupied - Shows 🏢 icon' : 'Empty - Shows 💾 icon'}
                             </div>
                           </div>
                           <button
@@ -956,10 +1034,80 @@ export default function AdminFloorPage() {
                       )}
                     </div>
                     
+                    {/* Spot Type Field */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Spot Type (Border Color)
+                      </label>
+                      {editingSpotType ? (
+                        <div className="space-y-2">
+                          <select
+                            value={spotType}
+                            onChange={(e) => setSpotType(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            autoFocus
+                          >
+                            {SPOT_TYPES.map(type => (
+                              <option key={type.id} value={type.id}>
+                                {type.icon} {type.name} - {type.description}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={saveSpotType}
+                              className="flex-1 px-3 py-1.5 bg-green-600  text-black rounded-lg hover:bg-green-700 transition-colors text-sm"
+                              disabled={!selectedSpot.dbId}
+                            >
+                              {selectedSpot.dbId ? '🎨 Save Type' : '⚠️ Not in DB'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingSpotType(false);
+                                setSpotType(selectedSpot.spotType || 'regular');
+                              }}
+                              className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div 
+                            className="p-3 rounded-lg flex items-center gap-3 border"
+                            style={{ borderColor: selectedSpot.spotTypeConfig?.color || '#fbbf24' }}
+                          >
+                            <div className="text-xl">
+                              {selectedSpot.spotTypeConfig?.icon || '🚗'}
+                            </div>
+                            <div>
+                              <div className="font-bold text-gray-900">
+                                {selectedSpot.spotTypeConfig?.name || 'Regular'}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {selectedSpot.companyName === 'Unassigned' 
+                                  ? 'Sets border color for unoccupied spots' 
+                                  : 'Shows in tooltip when hovering'}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={startEditingSpotType}
+                            className="w-full px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm flex items-center justify-center gap-1"
+                            disabled={!selectedSpot.dbId}
+                          >
+                            <span>🎨</span>
+                            <span>{selectedSpot.dbId ? 'Change Spot Type' : 'Wait for DB Save'}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    
                     {/* Parker Name Field */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Parker Name
+                        Parker Name (Hidden in UI)
                       </label>
                       {editingParker ? (
                         <div className="space-y-2">
@@ -974,7 +1122,7 @@ export default function AdminFloorPage() {
                           <div className="flex gap-2">
                             <button
                               onClick={saveParkerName}
-                              className="flex-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                              className="flex-1 px-3 py-1.5 bg-gray-600  text-black rounded-lg hover:bg-gray-700 transition-colors text-sm"
                               disabled={!selectedSpot.dbId}
                             >
                               {selectedSpot.dbId ? '👤 Save Parker' : '⚠️ Not in DB'}
@@ -989,36 +1137,39 @@ export default function AdminFloorPage() {
                               Cancel
                             </button>
                           </div>
+                          <p className="text-xs text-gray-500">
+                            Note: Parker name is stored but not shown visually on the map
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-2">
                           <div className={`p-3 rounded-lg ${
-                            selectedSpot.parkerName ? 'bg-purple-50 border border-purple-200' : 'bg-gray-50'
+                            selectedSpot.parkerName ? 'bg-gray-100 border border-gray-300' : 'bg-gray-50'
                           }`}>
                             <div className={`font-bold ${
-                              selectedSpot.parkerName ? 'text-purple-700' : 'text-gray-500'
+                              selectedSpot.parkerName ? 'text-gray-700' : 'text-gray-500'
                             }`}>
                               {selectedSpot.parkerName || 'No parker assigned'}
                             </div>
-                            {selectedSpot.parkerName && (
-                              <div className="text-xs text-purple-600 mt-1">
-                                ✓ Parker assigned to this spot
-                              </div>
-                            )}
+                            <div className="text-xs text-gray-500 mt-1">
+                              {selectedSpot.parkerName 
+                                ? 'Stored in database only (not shown on map)'
+                                : 'Optional - for internal record keeping'}
+                            </div>
                           </div>
                           <button
                             onClick={startEditingParker}
-                            className="w-full px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm flex items-center justify-center gap-1"
+                            className="w-full px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm flex items-center justify-center gap-1"
                             disabled={!selectedSpot.dbId}
                           >
                             <span>👤</span>
-                            <span>{selectedSpot.dbId ? (selectedSpot.parkerName ? 'Edit Parker' : 'Assign Parker') : 'Wait for DB Save'}</span>
+                            <span>{selectedSpot.dbId ? (selectedSpot.parkerName ? 'Edit Parker' : 'Add Parker') : 'Wait for DB Save'}</span>
                           </button>
                         </div>
                       )}
                     </div>
                     
-                    {/* Spot Number Field - FIXED */}
+                    {/* Spot Number Field */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Spot Number
@@ -1036,7 +1187,7 @@ export default function AdminFloorPage() {
                           <div className="flex gap-2">
                             <button
                               onClick={saveSpotNumber}
-                              className="flex-1 px-3 py-1.5 bg-green-600 text-black rounded-lg hover:bg-green-700 transition-colors text-sm"
+                              className="flex-1 px-3 py-1.5 bg-gray-700 text-black rounded-lg hover:bg-gray-800 transition-colors text-sm"
                             >
                               🔢 Save Number
                             </button>
@@ -1056,12 +1207,12 @@ export default function AdminFloorPage() {
                           <div className="p-3 bg-gray-50 rounded-lg">
                             <div className="text-xl font-bold text-gray-900">{selectedSpot.spotNumber || 'Unlabeled'}</div>
                             <div className="text-xs text-gray-500 mt-1">
-                              Detected from SVG
+                              Shows on hover
                             </div>
                           </div>
                           <button
                             onClick={startEditingSpotNumber}
-                            className="w-full px-3 py-1.5 bg-green-800 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm flex items-center justify-center gap-1"
+                            className="w-full px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm flex items-center justify-center gap-1"
                           >
                             <span>🔢</span>
                             <span>Edit Spot Number</span>
@@ -1075,85 +1226,93 @@ export default function AdminFloorPage() {
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
                   <div className="text-gray-400 mb-2">👆</div>
                   <p className="text-sm text-gray-600">
-                    Click on any cyan parking spot to edit:
+                    Click on any yellow parking spot to edit:
                   </p>
-                  <ul className="text-xs text-gray-500 mt-2 space-y-1">
-                    <li>🏢 Company Name</li>
-                    <li>👤 Parker Name</li>
-                    <li>🔢 Spot Number</li>
-                  </ul>
+                 
                 </div>
               )}
             </div>
 
-            {/* Spot List - SIMPLIFIED */}
+            {/* Spot List */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-medium text-gray-900">Parking Spots ({spots.length})</h3>
                   <div className="text-sm text-gray-500">
-                    <span className="text-green-600">{spots.filter(s => s.isFromDatabase).length} in DB</span>
+                    <span className="text-blue-600">{spots.filter(s => s.companyName !== 'Unassigned').length} occupied</span>
                     {' • '}
-                    <span className="text-purple-600">{spots.filter(s => s.parkerName).length} with parkers</span>
+                    <span className="text-green-600">{spots.filter(s => s.isFromDatabase).length} in DB</span>
                   </div>
                 </div>
                 
                 {spots.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto p-1">
-                    {spots.map((spot) => (
-                      <div
-                        key={spot.dbId || spot.id}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                          selectedSpot?.id === spot.id 
-                            ? 'ring-2 ring-blue-500 border-blue-300 bg-blue-50' 
-                            : spot.parkerName
-                            ? 'border-purple-300 bg-purple-50/50'
-                            : spot.isFromDatabase
-                            ? 'border-green-300 bg-green-50/30'
-                            : 'border-yellow-300 bg-yellow-50/30'
-                        }`}
-                        onClick={() => handleSpotClick(spot)}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-lg font-bold ${
-                              spot.parkerName ? 'text-purple-700' : 
-                              spot.isFromDatabase ? 'text-green-700' : 'text-yellow-700'
-                            }`}>
-                              {spot.spotNumber}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
+                    {spots.map((spot) => {
+                      const isOccupied = spot.companyName !== 'Unassigned';
+                      const spotTypeConfig = spot.spotTypeConfig || SPOT_TYPES[0];
+                      
+                      return (
+                        <div
+                          key={spot.dbId || spot.id}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                            selectedSpot?.id === spot.id 
+                              ? 'ring-2 ring-blue-500 border-blue-300 bg-blue-50' 
+                              : isOccupied
+                              ? 'border-blue-300 bg-blue-50/30'
+                              : `border-gray-300 bg-gray-50/30`
+                          }`}
+                          style={{
+                            borderLeftColor: isOccupied ? '#3b82f6' : spotTypeConfig.color,
+                            borderLeftWidth: '4px'
+                          }}
+                          onClick={() => handleSpotClick(spot)}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="text-xl">
+                                {isOccupied ? '🏢' : (spot.isFromDatabase ? '💾' : '🚗')}
+                              </div>
+                              <span className={`text-lg font-bold ${
+                                isOccupied ? 'text-blue-700' : 'text-gray-700'
+                              }`}>
+                                {spot.spotNumber}
+                              </span>
+                            </div>
                             {spot.isFromDatabase && (
-                              <div className="text-xs text-green-600" title="In database">💾</div>
-                            )}
-                            {spot.parkerName && (
-                              <div className="text-xs text-purple-600">👤</div>
+                              <div className="text-xs text-green-600">✓</div>
                             )}
                           </div>
-                        </div>
-                        
-                        <div className="text-sm font-medium text-gray-900 truncate mb-1" title={spot.companyName}>
-                          {spot.companyName}
-                        </div>
-                        
-                        {spot.parkerName ? (
-                          <div className="text-xs text-purple-600 truncate" title={spot.parkerName}>
-                            👤 {spot.parkerName}
+                          
+                          <div className="text-sm font-medium text-gray-900 truncate mb-1" title={spot.companyName}>
+                            {spot.companyName}
                           </div>
-                        ) : (
-                          <div className="text-xs text-gray-500 italic">
-                            No parker assigned
+                          
+                          <div className="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                            <div 
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: spotTypeConfig.color }}
+                            />
+                            {spotTypeConfig.name}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          
+                          {spot.parkerName ? (
+                            <div className="text-xs text-gray-500 truncate" title={spot.parkerName}>
+                              👤 {spot.parkerName}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500 italic">
+                              {isOccupied ? 'Company spot' : 'Available'}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <div className="mb-4">🚗</div>
-                    <p>No cyan parking spots detected.</p>
-                    <p className="text-sm mt-1">SVG loaded, but no cyan-colored spots found.</p>
+                    <p>No yellow parking spots detected.</p>
+                    <p className="text-sm mt-1">SVG loaded, but no yellow-colored spots found.</p>
                   </div>
                 )}
               </div>
