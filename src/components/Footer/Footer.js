@@ -9,7 +9,7 @@ export default function Footer() {
                 <span className="font-bold">P</span>
               </div>
               <div>
-                <p className="text-xl font-bold">Parking Map System</p>
+                <p className="text-xl font-bold">The Republic Digital Parking Map</p>
                 <p className="text-gray-400 text-sm">Interactive Parking Viewer</p>
               </div>
             </div>
@@ -17,7 +17,7 @@ export default function Footer() {
           
           <div className="text-center md:text-right">
             <p className="text-gray-400">
-              © {new Date().getFullYear()} Parking Management Inc.
+              © {new Date().getFullYear()} Vend Park Inc.
             </p>
           
           </div>
