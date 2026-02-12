@@ -22,7 +22,7 @@ export default function Header() {
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <button  className="text-lg  font-bold text-blue-600 hover:text-blue-700">
-               The Republic Digital Parking Map
+               The Republic Interactive Parking Map
               </button>
             </div>
             
